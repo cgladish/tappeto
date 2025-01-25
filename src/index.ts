@@ -1,8 +1,25 @@
 import { TestRunner } from './TestRunner';
 
+export interface TapConfig {
+  displayWidth?: number;
+  displayHeight?: number;
+  debug?: boolean;
+  maxAttempts?: number;
+  screenshotOnError?: boolean;
+  screenshotDir?: string;
+}
+
 class TapInterface {
   private runner: TestRunner | null = null;
   private initPromise: Promise<void>;
+  private config: TapConfig = {
+    displayWidth: 1920,
+    displayHeight: 1080,
+    debug: false,
+    maxAttempts: 10,
+    screenshotOnError: true,
+    screenshotDir: './screenshots'
+  };
 
   constructor() {
     this.initPromise = this.initialize();
@@ -10,9 +27,9 @@ class TapInterface {
 
   private async initialize() {
     this.runner = await TestRunner.create({
-      displayWidth: 1920,
-      displayHeight: 1080
-    });
+      displayWidth: this.config.displayWidth,
+      displayHeight: this.config.displayHeight,
+    }, this.config.debug);
   }
 
   step(prompt: string, validation?: (result: any) => Promise<boolean> | boolean) {
@@ -35,8 +52,8 @@ class TapInterface {
     return this.runner.run();
   }
 
-  // Add configuration methods
-  configure(config: { displayWidth?: number; displayHeight?: number }) {
+  configure(config: Partial<TapConfig>) {
+    this.config = { ...this.config, ...config };
     this.initPromise = this.initialize();
     return this;
   }
