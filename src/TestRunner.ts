@@ -146,22 +146,37 @@ export class TestRunner {
     
     const image = await sharp(screenshot);
     const metadata = await image.metadata();
-    const width = metadata.width || this.computerConfig.displayWidth;
-    const height = metadata.height || this.computerConfig.displayHeight;
+    if (!metadata.width || !metadata.height) {
+      throw new Error('Could not get image dimensions');
+    }
 
-    for (let y = 0; y < height; y += GRID_SIZE) {
-      for (let x = 0; x < width; x += GRID_SIZE) {
-        const endX = Math.min(x + GRID_SIZE, width);
-        const endY = Math.min(y + GRID_SIZE, height);
-        
-        const sectionImage = await image
-          .extract({ left: x, top: y, width: endX - x, height: endY - y })
-          .toBuffer();
+    for (let y = 0; y < metadata.height; y += GRID_SIZE) {
+      for (let x = 0; x < metadata.width; x += GRID_SIZE) {
+        const width = Math.min(GRID_SIZE, metadata.width - x);
+        const height = Math.min(GRID_SIZE, metadata.height - y);
 
-        sections.push({
-          section: `Section (${x},${y})-(${endX},${endY})`,
-          image: `data:image/png;base64,${sectionImage.toString('base64')}`
-        });
+        // Skip if dimensions would be invalid
+        if (width <= 0 || height <= 0) continue;
+
+        try {
+          const sectionImage = await image
+            .clone()  // Create a new instance for each extraction
+            .extract({ 
+              left: x, 
+              top: y, 
+              width, 
+              height 
+            })
+            .toBuffer();
+
+          sections.push({
+            section: `Section (${x},${y})-(${x + width},${y + height})`,
+            image: `data:image/png;base64,${sectionImage.toString('base64')}`
+          });
+        } catch (error) {
+          console.error(`Failed to extract section at (${x},${y}):`, error);
+          // Continue with other sections even if one fails
+        }
       }
     }
     
@@ -175,66 +190,71 @@ export class TestRunner {
     let attempts = 0;
     const MAX_ATTEMPTS_PER_STEP = 10;
 
-    const screenshot = await this.page.screenshot({ 
-      type: 'png',
-      path: undefined
-    });
+    while (!stepComplete && attempts < MAX_ATTEMPTS_PER_STEP) {
+      attempts++;
 
-    const gridSections = await this.getGridScreenshots(screenshot);
-    
-    const historyContext = this.actionHistory.map(h => 
-      `Action: ${h.command.action} (${h.command.goal})` +
-      (h.command.text ? ` with text "${h.command.text}"` : '') +
-      (h.command.coordinate ? ` at coordinates (${h.command.coordinate.x}, ${h.command.coordinate.y})` : '') +
-      (h.error ? ' - Failed' : ' - Success')
-    ).join('\n');
-
-    const lastError = this.actionHistory[this.actionHistory.length - 1]?.error;
-    
-    const messages = [
-      new SystemMessage(systemMessage),
-      new HumanMessage({
-        content: [
-          {
-            type: "text",
-            text: `Previous actions taken:\n${historyContext}` + 
-              (lastError ? `\n\nLast action failed with error: ${lastError}. Consider a different approach.` : '') +
-              `\n\nCurrent goal: ${step.prompt}\n` +
-              (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
-              `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
-              `Below are screenshots of each 100x100 pixel section of the current browser state. Use these to determine accurate coordinates for interactions.`
-          },
-          ...gridSections.map(section => ({
-            type: "text",
-            text: section.section
-          })),
-          ...gridSections.map(section => ({
-            type: "image_url",
-            image_url: {
-              url: section.image,
-              detail: "high"
-            }
-          }))
-        ]
-      })
-    ];
-
-    let command: ComputerCommand;
-    try {
-      command = await this.model.invoke(messages);
-      if (this.debug) {
-        console.log('\nModel Response:', JSON.stringify(command, null, 2));
-      }
-      const result = await this.executeCommand(command);
-      this.actionHistory.push({ command, result });
-      stepComplete = command.stepComplete;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.actionHistory.push({ 
-        command: command!, 
-        error: errorMessage 
+      const screenshot = await this.page.screenshot({ 
+        type: 'png',
+        path: undefined
       });
-      throw error;
+
+      const gridSections = await this.getGridScreenshots(screenshot);
+      
+      const historyContext = this.actionHistory.map(h => 
+        `Action: ${h.command.action} (${h.command.goal})` +
+        (h.command.text ? ` with text "${h.command.text}"` : '') +
+        (h.command.coordinate ? ` at coordinates (${h.command.coordinate.x}, ${h.command.coordinate.y})` : '') +
+        (h.error ? ' - Failed' : ' - Success')
+      ).join('\n');
+
+      const lastError = this.actionHistory[this.actionHistory.length - 1]?.error;
+      
+      const messages = [
+        new SystemMessage(systemMessage),
+        new HumanMessage({
+          content: [
+            {
+              type: "text",
+              text: `Previous actions taken:\n${historyContext}` + 
+                (lastError ? `\n\nLast action failed with error: ${lastError}. Consider a different approach.` : '') +
+                `\n\nCurrent goal: ${step.prompt}\n` +
+                (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
+                `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
+                `Below are screenshots of each 100x100 pixel section of the current browser state. Use these to determine accurate coordinates for interactions.`
+            },
+            ...gridSections.map(section => ({
+              type: "text",
+              text: section.section
+            })),
+            ...gridSections.map(section => ({
+              type: "image_url",
+              image_url: {
+                url: section.image,
+                detail: "high"
+              }
+            }))
+          ]
+        })
+      ];
+
+      let command: ComputerCommand;
+      try {
+        command = await this.model.invoke(messages);
+        if (this.debug) {
+          console.log('\nModel Response:', JSON.stringify(command, null, 2));
+        }
+        const result = await this.executeCommand(command);
+        this.actionHistory.push({ command, result });
+        stepComplete = command.stepComplete;
+        attempts = 0;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.actionHistory.push({ 
+          command: command!, 
+          error: errorMessage 
+        });
+        console.error(`Attempt ${attempts} failed:`, errorMessage);
+      }
     }
 
     if (!stepComplete) {
