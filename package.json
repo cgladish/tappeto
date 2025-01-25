@@ -1,0 +1,44 @@
+{
+  "name": "tappeto",
+  "version": "0.1.0",
+  "description": "Natural language UI & E2E testing using Anthropic's Computer Use tool",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "keywords": [
+    "testing",
+    "e2e",
+    "ui-testing",
+    "anthropic",
+    "natural-language"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.12",
+    "@langchain/core": "^0.3.36",
+    "@langchain/openai": "^0.4.2",
+    "langchain": "^0.3.8",
+    "playwright": "^1.42.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.10.10",
+    "@typescript-eslint/eslint-plugin": "^8.21.0",
+    "@typescript-eslint/parser": "^8.21.0",
+    "eslint": "^9.19.0",
+    "eslint-plugin-etc": "^2.0.3",
+    "eslint-plugin-import-newlines": "^1.3.0",
+    "eslint-plugin-local-rules": "^3.0.2",
+    "eslint-plugin-no-null": "^1.0.0",
+    "eslint-plugin-unused-imports": "^4.1.4",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.3.3"
+  }
+}
