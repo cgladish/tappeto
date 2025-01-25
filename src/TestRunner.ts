@@ -12,6 +12,7 @@ import { initChatModel } from "langchain/chat_models/universal";
 import { ComputerCommandSchema } from './types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { systemMessage } from './system-message';
+import sharp from 'sharp';
 
 interface ModelDefinition {
   model: string;
@@ -139,6 +140,34 @@ export class TestRunner {
     }
   }
 
+  private async getGridScreenshots(screenshot: Buffer): Promise<{ section: string, image: string }[]> {
+    const GRID_SIZE = 100;
+    const sections: { section: string, image: string }[] = [];
+    
+    const image = await sharp(screenshot);
+    const metadata = await image.metadata();
+    const width = metadata.width || this.computerConfig.displayWidth;
+    const height = metadata.height || this.computerConfig.displayHeight;
+
+    for (let y = 0; y < height; y += GRID_SIZE) {
+      for (let x = 0; x < width; x += GRID_SIZE) {
+        const endX = Math.min(x + GRID_SIZE, width);
+        const endY = Math.min(y + GRID_SIZE, height);
+        
+        const sectionImage = await image
+          .extract({ left: x, top: y, width: endX - x, height: endY - y })
+          .toBuffer();
+
+        sections.push({
+          section: `Section (${x},${y})-(${endX},${endY})`,
+          image: `data:image/png;base64,${sectionImage.toString('base64')}`
+        });
+      }
+    }
+    
+    return sections;
+  }
+
   private async executeStep(step: TestStep): Promise<any> {
     if (!this.page) throw new Error('Browser page not initialized');
 
@@ -146,64 +175,66 @@ export class TestRunner {
     let attempts = 0;
     const MAX_ATTEMPTS_PER_STEP = 10;
 
-    while (!stepComplete && attempts < MAX_ATTEMPTS_PER_STEP) {
-      attempts++;
-      
-      const screenshot = await this.page.screenshot({ 
-        type: 'png',
-        path: undefined
-      }).then(buffer => buffer.toString('base64'));
-      
-      const historyContext = this.actionHistory.map(h => 
-        `Action: ${h.command.action} (${h.command.goal})` +
-        (h.command.text ? ` with text "${h.command.text}"` : '') +
-        (h.command.coordinate ? ` at coordinates (${h.command.coordinate.x}, ${h.command.coordinate.y})` : '') +
-        (h.error ? ' - Failed' : ' - Success')
-      ).join('\n');
+    const screenshot = await this.page.screenshot({ 
+      type: 'png',
+      path: undefined
+    });
 
-      const lastError = this.actionHistory[this.actionHistory.length - 1]?.error;
-      
-      const messages = [
-        new SystemMessage(systemMessage),
-        new HumanMessage({
-          content: [
-            {
-              type: "text",
-              text: `Previous actions taken:\n${historyContext}` + 
-                (lastError ? `\n\nLast action failed with error: ${lastError}. Consider a different approach.` : '') +
-                `\n\nCurrent goal: ${step.prompt}\n` +
-                (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
-                `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
-                `Below is a screenshot of the current browser state. Use it to verify your actions are having the intended effect.`
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/png;base64,${screenshot}`,
-                detail: "high"
-              }
+    const gridSections = await this.getGridScreenshots(screenshot);
+    
+    const historyContext = this.actionHistory.map(h => 
+      `Action: ${h.command.action} (${h.command.goal})` +
+      (h.command.text ? ` with text "${h.command.text}"` : '') +
+      (h.command.coordinate ? ` at coordinates (${h.command.coordinate.x}, ${h.command.coordinate.y})` : '') +
+      (h.error ? ' - Failed' : ' - Success')
+    ).join('\n');
+
+    const lastError = this.actionHistory[this.actionHistory.length - 1]?.error;
+    
+    const messages = [
+      new SystemMessage(systemMessage),
+      new HumanMessage({
+        content: [
+          {
+            type: "text",
+            text: `Previous actions taken:\n${historyContext}` + 
+              (lastError ? `\n\nLast action failed with error: ${lastError}. Consider a different approach.` : '') +
+              `\n\nCurrent goal: ${step.prompt}\n` +
+              (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
+              `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
+              `Below are screenshots of each 100x100 pixel section of the current browser state. Use these to determine accurate coordinates for interactions.`
+          },
+          ...gridSections.map(section => ({
+            type: "text",
+            text: section.section
+          })),
+          ...gridSections.map(section => ({
+            type: "image_url",
+            image_url: {
+              url: section.image,
+              detail: "high"
             }
-          ]
-        })
-      ];
+          }))
+        ]
+      })
+    ];
 
-      let command: ComputerCommand;
-      try {
-        command = await this.model.invoke(messages);
-        if (this.debug) {
-          console.log('\nModel Response:', JSON.stringify(command, null, 2));
-        }
-        const result = await this.executeCommand(command);
-        this.actionHistory.push({ command, result });
-        stepComplete = command.stepComplete;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        this.actionHistory.push({ 
-          command: command!, 
-          error: errorMessage 
-        });
-        throw error;
+    let command: ComputerCommand;
+    try {
+      command = await this.model.invoke(messages);
+      if (this.debug) {
+        console.log('\nModel Response:', JSON.stringify(command, null, 2));
       }
+      const result = await this.executeCommand(command);
+      this.actionHistory.push({ command, result });
+      stepComplete = command.stepComplete;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.actionHistory.push({ 
+        command: command!, 
+        error: errorMessage 
+      });
+      throw error;
     }
 
     if (!stepComplete) {

@@ -5,6 +5,7 @@ IMPORTANT:
 - You are always starting with a fresh browser window. If you need to visit a website, your first action must be a 'goto' command.
 - You will receive a screenshot of the current browser state with each prompt. Use this to verify your actions are working and to determine your next action.
 - If the screenshot shows your previous action did not have the intended effect, try a different approach.
+- The screen is divided into a grid of 100x100 pixel sections. Use these sections to determine accurate coordinates for mouse actions. Choose coordinates within the appropriate grid section where your target element is located.
 
 Each command should have:
 - An 'action' field for the specific interaction
