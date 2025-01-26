@@ -41,7 +41,11 @@ export class TestRunner {
   private model: Runnable;
   private cursorX = 0;
   private cursorY = 0;
-  private actionHistory: Array<{ command: ComputerCommand, result?: any, error?: string }> = [];
+  private actionHistory: Array<{
+    command: ComputerCommand,
+    result?: any, 
+    error?: string
+  }> = [];
   private consecutiveErrors = 0;
   private readonly MAX_CONSECUTIVE_ERRORS = 5;
   private debug: boolean;
@@ -204,7 +208,7 @@ export class TestRunner {
                 `\n\nCurrent goal: ${step.prompt}\n` +
                 (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
                 `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
-                `Below is a screenshot of the current browser state. Use this to verify the previous action was successful, as well as to determine accurate coordinates for interactions.`
+                `Below is a screenshot of the current browser state. Use this to verify the previous action achieved the intended result, as well as to determine accurate coordinates for interactions.`
             },
             {
               type: "image_url",

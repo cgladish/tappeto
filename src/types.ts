@@ -18,11 +18,11 @@ export const ComputerCommandSchema = z.object({
     'double_click',
     'cursor_position',
     'goto'
-  ]),
-  coordinate: CoordinateSchema.optional(),
-  text: z.string().optional(),
-  url: z.string().optional(),
-  goal: z.string(),
+  ]).describe('The type of action to perform'),
+  coordinate: CoordinateSchema.optional().describe('The coordinates to trigger a mouse action at, if applicable'),
+  text: z.string().optional().describe('The text to type, if applicable'),
+  url: z.string().optional().describe('The URL to navigate to, if applicable'),
+  goal: z.string().describe('The overarching goal of the current sequence of actions'),
   stepComplete: z.boolean().describe('Whether this command completes the current step'),
   reasoning: z.string().describe('Explanation of why this action was chosen')
 });
