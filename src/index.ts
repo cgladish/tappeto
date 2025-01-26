@@ -1,24 +1,22 @@
 import { TestRunner } from './TestRunner';
 
 export interface TapConfig {
-  displayWidth?: number;
-  displayHeight?: number;
+  displayWidth: number;
+  displayHeight: number;
+  displayNumber: number;
   debug?: boolean;
   maxAttempts?: number;
-  screenshotOnError?: boolean;
-  screenshotDir?: string;
 }
 
 class TapInterface {
   private runner: TestRunner | null = null;
   private initPromise: Promise<void>;
   private config: TapConfig = {
-    displayWidth: 1920,
-    displayHeight: 1080,
+    displayWidth: 1024,
+    displayHeight: 768,
+    displayNumber: 1,
     debug: false,
     maxAttempts: 10,
-    screenshotOnError: true,
-    screenshotDir: './screenshots'
   };
 
   constructor() {
@@ -29,6 +27,7 @@ class TapInterface {
     this.runner = await TestRunner.create({
       displayWidth: this.config.displayWidth,
       displayHeight: this.config.displayHeight,
+      displayNumber: this.config.displayNumber,
     }, this.config.debug);
   }
 

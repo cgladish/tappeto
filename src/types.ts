@@ -49,6 +49,6 @@ export type ComputerConfig = z.infer<typeof ComputerConfigSchema>;
 
 export interface TestRunnerConfig {
   model: Runnable;
-  computerConfig?: Partial<ComputerConfig>;
+  computerConfig: ComputerConfig;
   debug?: boolean;
 } 

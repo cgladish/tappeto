@@ -12,22 +12,18 @@ import { initChatModel } from "langchain/chat_models/universal";
 import { ComputerCommandSchema } from './types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { systemMessage } from './system-message';
-import sharp from 'sharp';
 
 interface ModelDefinition {
   model: string;
   apiKey: string;
 }
 
-export const primaryModel: ModelDefinition = {
-  model: "gpt-4o-2024-08-06",
-  apiKey: process.env.OPENAI_API_KEY!
-};
+export const primaryModel: ModelDefinition = 
+{
+  model: "claude-3-5-sonnet-20241022",
+  apiKey: process.env.ANTHROPIC_API_KEY!
+}
 export const fallbackModels: ModelDefinition[] = [
-  {
-    model: "claude-3-5-sonnet-20241022",
-    apiKey: process.env.ANTHROPIC_API_KEY!
-  }
 ];
 
 const sharedConfig = {
@@ -49,10 +45,11 @@ export class TestRunner {
   private consecutiveErrors = 0;
   private readonly MAX_CONSECUTIVE_ERRORS = 5;
   private debug: boolean;
+  private debugTimers: Map<string, { start: number, label: string }> = new Map();
 
-  static async create(computerConfig: Partial<ComputerConfig> = {}, debug: boolean = false): Promise<TestRunner> {
+  static async create(computerConfig: ComputerConfig, debug: boolean = false): Promise<TestRunner> {
     try {
-      const primaryChat = (await initChatModel(primaryModel.model, {
+      let model = (await initChatModel(primaryModel.model, {
         apiKey: primaryModel.apiKey,
         ...sharedConfig
       })).withStructuredOutput(ComputerCommandSchema, {
@@ -70,7 +67,9 @@ export class TestRunner {
         fallbackChats.push(fallbackChat);
       }
 
-      const model = primaryChat.withFallbacks(fallbackChats);
+      if (fallbackChats.length > 0) {
+        model = model.withFallbacks(fallbackChats);
+      }
       return new TestRunner({ model, computerConfig, debug });
     } catch (error) {
       console.error("Error initializing TestRunner:", error);
@@ -78,15 +77,10 @@ export class TestRunner {
     }
   }
 
-  private constructor({ model, computerConfig = {}, debug = false }: TestRunnerConfig) {
+  private constructor({ model, computerConfig, debug = false }: TestRunnerConfig) {
     this.model = model;
     this.debug = debug;
-    this.computerConfig = ComputerConfigSchema.parse({
-      displayWidth: 1024,
-      displayHeight: 768,
-      displayNumber: 1,
-      ...computerConfig
-    });
+    this.computerConfig = ComputerConfigSchema.parse(computerConfig);
   }
 
   addStep(step: TestStep): TestRunner {
@@ -117,6 +111,7 @@ export class TestRunner {
       
       for (const step of this.steps) {
         try {
+          await new Promise(resolve => setTimeout(resolve, 10000));
           const result = await this.executeStep(step);
           if (step.validation && !(await step.validation(result))) {
             console.error(`Validation failed for step: ${step.prompt}`);
@@ -140,67 +135,57 @@ export class TestRunner {
     }
   }
 
-  private async getGridScreenshots(screenshot: Buffer): Promise<{ section: string, image: string }[]> {
-    const GRID_SIZE = 100;
-    const sections: { section: string, image: string }[] = [];
-    
-    const image = await sharp(screenshot);
-    const metadata = await image.metadata();
-    if (!metadata.width || !metadata.height) {
-      throw new Error('Could not get image dimensions');
+  private logDebug(message: string, data?: any) {
+    if (this.debug) {
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] ${message}`);
+      if (data) console.log(JSON.stringify(data, null, 2));
     }
+  }
 
-    for (let y = 0; y < metadata.height; y += GRID_SIZE) {
-      for (let x = 0; x < metadata.width; x += GRID_SIZE) {
-        const width = Math.min(GRID_SIZE, metadata.width - x);
-        const height = Math.min(GRID_SIZE, metadata.height - y);
+  private logDebugStart(label: string): string {
+    if (!this.debug) return '';
+    const id = Math.random().toString(36).substring(2, 15);
+    this.debugTimers.set(id, { start: Date.now(), label });
+    this.logDebug(`Starting: ${label}`);
+    return id;
+  }
 
-        // Skip if dimensions would be invalid
-        if (width <= 0 || height <= 0) continue;
-
-        try {
-          const sectionImage = await image
-            .clone()  // Create a new instance for each extraction
-            .extract({ 
-              left: x, 
-              top: y, 
-              width, 
-              height 
-            })
-            .toBuffer();
-
-          sections.push({
-            section: `Section (${x},${y})-(${x + width},${y + height})`,
-            image: `data:image/png;base64,${sectionImage.toString('base64')}`
-          });
-        } catch (error) {
-          console.error(`Failed to extract section at (${x},${y}):`, error);
-          // Continue with other sections even if one fails
-        }
-      }
-    }
+  private logDebugEnd(id: string, data?: any) {
+    if (!this.debug || !id) return;
+    const timer = this.debugTimers.get(id);
+    if (!timer) return;
     
-    return sections;
+    const duration = Date.now() - timer.start;
+    this.logDebug(`Completed: ${timer.label} (${duration}ms)`, data);
+    this.debugTimers.delete(id);
   }
 
   private async executeStep(step: TestStep): Promise<any> {
     if (!this.page) throw new Error('Browser page not initialized');
 
+    const stepId = this.logDebugStart(`Step: ${step.prompt}`);
     let stepComplete = false;
     let attempts = 0;
     const MAX_ATTEMPTS_PER_STEP = 10;
 
     while (!stepComplete && attempts < MAX_ATTEMPTS_PER_STEP) {
+      if (attempts > 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(1.5, attempts - 1)));
+      }
       attempts++;
+      const attemptId = this.logDebugStart(`Attempt ${attempts}`);
 
+      const screenshotId = this.logDebugStart('Taking screenshot');
       const screenshot = await this.page.screenshot({ 
         type: 'png',
         path: undefined
       });
-
-      const gridSections = await this.getGridScreenshots(screenshot);
+      const screenshotBase64 = screenshot.toString('base64');
+      this.logDebugEnd(screenshotId);
       
-      const historyContext = this.actionHistory.map(h => 
+      // Only include recent history
+      const relevantHistory = this.actionHistory.slice(-10).map(h => 
         `Action: ${h.command.action} (${h.command.goal})` +
         (h.command.text ? ` with text "${h.command.text}"` : '') +
         (h.command.coordinate ? ` at coordinates (${h.command.coordinate.x}, ${h.command.coordinate.y})` : '') +
@@ -215,35 +200,34 @@ export class TestRunner {
           content: [
             {
               type: "text",
-              text: `Previous actions taken:\n${historyContext}` + 
+              text: `Previous actions taken:\n${relevantHistory}` + 
                 (lastError ? `\n\nLast action failed with error: ${lastError}. Consider a different approach.` : '') +
                 `\n\nCurrent goal: ${step.prompt}\n` +
                 (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
                 `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
-                `Below are screenshots of each 100x100 pixel section of the current browser state. Use these to determine accurate coordinates for interactions.`
+                `Below is a screenshot of the current browser state. Use this to verify the previous action was successful, as well as to determine accurate coordinates for interactions.`
             },
-            ...gridSections.map(section => ({
-              type: "text",
-              text: section.section
-            })),
-            ...gridSections.map(section => ({
+            {
               type: "image_url",
               image_url: {
-                url: section.image,
+                url: `data:image/png;base64,${screenshotBase64}`,
                 detail: "high"
               }
-            }))
+            }
           ]
         })
       ];
 
       let command: ComputerCommand;
       try {
+        const modelId = this.logDebugStart('Waiting for model response');
         command = await this.model.invoke(messages);
-        if (this.debug) {
-          console.log('\nModel Response:', JSON.stringify(command, null, 2));
-        }
+        this.logDebugEnd(modelId, command);
+
+        const executeId = this.logDebugStart('Executing command');
         const result = await this.executeCommand(command);
+        this.logDebugEnd(executeId);
+
         this.actionHistory.push({ command, result });
         stepComplete = command.stepComplete;
         attempts = 0;
@@ -253,13 +237,16 @@ export class TestRunner {
           command: command!, 
           error: errorMessage 
         });
-        console.error(`Attempt ${attempts} failed:`, errorMessage);
+        this.logDebug(`Attempt failed: ${errorMessage}`);
       }
+      this.logDebugEnd(attemptId);
     }
 
     if (!stepComplete) {
+      this.logDebug(`Step failed after ${attempts} attempts`);
       throw new Error(`Failed to complete step after ${MAX_ATTEMPTS_PER_STEP} attempts`);
     }
+    this.logDebugEnd(stepId);
   }
 
   private async executeCommand(command: ComputerCommand): Promise<any> {
