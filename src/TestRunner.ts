@@ -111,7 +111,6 @@ export class TestRunner {
       
       for (const step of this.steps) {
         try {
-          await new Promise(resolve => setTimeout(resolve, 10000));
           const result = await this.executeStep(step);
           if (step.validation && !(await step.validation(result))) {
             console.error(`Validation failed for step: ${step.prompt}`);
