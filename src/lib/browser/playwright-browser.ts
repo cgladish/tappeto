@@ -1,5 +1,6 @@
 import { Browser, BrowserContext, Page, chromium } from 'playwright';
 import { IBrowser, BrowserConfig, Coordinate } from './types';
+import { clickEffectScript } from './click-effect';
 
 export class PlaywrightBrowser implements IBrowser {
   private browser?: Browser;
@@ -46,33 +47,50 @@ export class PlaywrightBrowser implements IBrowser {
     await this.page.mouse.move(this.cursorX, this.cursorY);
   }
 
+  private async highlightClick(coordinate: Coordinate): Promise<void> {
+    if (!this.page) return;
+    await this.page.evaluate(clickEffectScript(coordinate));
+  }
+
   async leftClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
     this.cursorX = coordinate.x;
     this.cursorY = coordinate.y;
     await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'left' });
+    await this.highlightClick(coordinate);
   }
 
-  async rightClick(): Promise<void> {
+  async rightClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
+    this.cursorX = coordinate.x;
+    this.cursorY = coordinate.y;
     await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'right' });
+    await this.highlightClick(coordinate);
   }
 
-  async middleClick(): Promise<void> {
+  async middleClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
+    this.cursorX = coordinate.x;
+    this.cursorY = coordinate.y;
     await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'middle' });
+    await this.highlightClick(coordinate);
   }
 
-  async doubleClick(): Promise<void> {
+  async doubleClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
+    this.cursorX = coordinate.x;
+    this.cursorY = coordinate.y;
     await this.page.mouse.dblclick(this.cursorX, this.cursorY);
+    await this.highlightClick(coordinate);
   }
 
   async dragAndDrop(target: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
+    await this.highlightClick(target);
     await this.page.mouse.down();
     await this.page.mouse.move(target.x, target.y);
     await this.page.mouse.up();
+    await this.highlightClick(target);
   }
 
   async takeScreenshot(): Promise<string> {

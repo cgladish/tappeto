@@ -1,5 +1,6 @@
 import { Builder, By, Key, WebDriver, Origin } from 'selenium-webdriver';
 import { IBrowser, BrowserConfig, Coordinate } from './types';
+import { clickEffectScript } from './click-effect';
 
 export class SeleniumBrowser implements IBrowser {
   private driver?: WebDriver;
@@ -49,35 +50,46 @@ export class SeleniumBrowser implements IBrowser {
     await this.moveTo(coordinate);
   }
 
+  private async highlightClick(coordinate: Coordinate): Promise<void> {
+    if (!this.driver) return;
+    await this.driver.executeScript(clickEffectScript(coordinate));
+  }
+
   async leftClick(coordinate: Coordinate): Promise<void> {
     if (!this.driver) throw new Error('Browser not initialized');
     await this.moveTo(coordinate);
+    await this.highlightClick(coordinate);
     await this.driver.actions().click().perform();
   }
 
   async rightClick(coordinate: Coordinate): Promise<void> {
     if (!this.driver) throw new Error('Browser not initialized');
     await this.moveTo(coordinate);
+    await this.highlightClick(coordinate);
     await this.driver.actions().contextClick().perform();
   }
 
   async middleClick(coordinate: Coordinate): Promise<void> {
     if (!this.driver) throw new Error('Browser not initialized');
     await this.moveTo(coordinate);
+    await this.highlightClick(coordinate);
     await this.driver.actions().click().perform();
   }
 
   async doubleClick(coordinate: Coordinate): Promise<void> {
     if (!this.driver) throw new Error('Browser not initialized');
     await this.moveTo(coordinate);
+    await this.highlightClick(coordinate);
     await this.driver.actions().doubleClick().perform();
   }
 
   async dragAndDrop(target: Coordinate): Promise<void> {
     if (!this.driver) throw new Error('Browser not initialized');
     await this.driver.actions().press().perform();
+    await this.highlightClick(target);
     await this.moveTo(target);
     await this.driver.actions().release().perform();
+    await this.highlightClick(target);
   }
 
   async takeScreenshot(): Promise<string> {
