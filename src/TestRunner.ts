@@ -13,7 +13,7 @@ import { ComputerCommandSchema } from './types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { systemMessage } from './system-message';
 import { IBrowser } from './lib/browser/types';
-import { PlaywrightBrowser } from './lib/browser/playwright-browser';
+import { SeleniumBrowser } from './lib/browser/selenium-browser';
 
 interface ModelDefinition {
   model: string;
@@ -78,7 +78,7 @@ export class TestRunner {
         model, 
         computerConfig, 
         debug,
-        browser: new PlaywrightBrowser() 
+        browser: new SeleniumBrowser() 
       });
     } catch (error) {
       console.error("Error initializing TestRunner:", error);
@@ -271,7 +271,8 @@ export class TestRunner {
           break;
 
         case 'left_click':
-          await this.browser.leftClick();
+          if (!command.coordinate) throw new Error('Coordinate required for left_click action');
+          await this.browser.leftClick(command.coordinate);
           break;
 
         case 'left_click_drag':
@@ -280,19 +281,19 @@ export class TestRunner {
           break;
 
         case 'right_click':
-          await this.browser.rightClick();
+          if (!command.coordinate) throw new Error('Coordinate required for right_click action');
+          await this.browser.rightClick(command.coordinate);
           break;
 
         case 'middle_click':
-          await this.browser.middleClick();
+          if (!command.coordinate) throw new Error('Coordinate required for middle_click action');
+          await this.browser.middleClick(command.coordinate);
           break;
 
         case 'double_click':
-          await this.browser.doubleClick();
+          if (!command.coordinate) throw new Error('Coordinate required for double_click action');
+          await this.browser.doubleClick(command.coordinate);
           break;
-
-        case 'cursor_position':
-          return this.browser.getCursorPosition();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

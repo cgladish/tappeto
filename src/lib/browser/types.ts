@@ -15,11 +15,10 @@ export interface IBrowser {
   pressKey(key: string): Promise<void>;
   type(text: string): Promise<void>;
   mouseMove(coordinate: Coordinate): Promise<void>;
-  leftClick(): Promise<void>;
-  rightClick(): Promise<void>;
-  middleClick(): Promise<void>;
-  doubleClick(): Promise<void>;
+  leftClick(coordinate: Coordinate): Promise<void>;
+  rightClick(coordinate: Coordinate): Promise<void>;
+  middleClick(coordinate: Coordinate): Promise<void>;
+  doubleClick(coordinate: Coordinate): Promise<void>;
   dragAndDrop(target: Coordinate): Promise<void>;
-  getCursorPosition(): Coordinate;
   takeScreenshot(): Promise<string>; // Returns base64 string
 } 

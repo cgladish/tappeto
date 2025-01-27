@@ -16,7 +16,6 @@ export const ComputerCommandSchema = z.object({
     'right_click',
     'middle_click',
     'double_click',
-    'cursor_position',
     'goto'
   ]).describe('The type of action to perform'),
   coordinate: CoordinateSchema.optional().describe('The coordinates to trigger a mouse action at, if applicable'),

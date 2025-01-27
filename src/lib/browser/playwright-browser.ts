@@ -46,8 +46,10 @@ export class PlaywrightBrowser implements IBrowser {
     await this.page.mouse.move(this.cursorX, this.cursorY);
   }
 
-  async leftClick(): Promise<void> {
+  async leftClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
+    this.cursorX = coordinate.x;
+    this.cursorY = coordinate.y;
     await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'left' });
   }
 
@@ -71,10 +73,6 @@ export class PlaywrightBrowser implements IBrowser {
     await this.page.mouse.down();
     await this.page.mouse.move(target.x, target.y);
     await this.page.mouse.up();
-  }
-
-  getCursorPosition(): Coordinate {
-    return { x: this.cursorX, y: this.cursorY };
   }
 
   async takeScreenshot(): Promise<string> {
