@@ -1,13 +1,10 @@
 import { Browser, BrowserContext, Page, chromium } from 'playwright';
 import { IBrowser, BrowserConfig, Coordinate } from './types';
-import { clickEffectScript } from './click-effect';
 
 export class PlaywrightBrowser implements IBrowser {
   private browser?: Browser;
   private context?: BrowserContext;
   private page?: Page;
-  private cursorX = 0;
-  private cursorY = 0;
 
   async init(config: BrowserConfig): Promise<void> {
     this.browser = await chromium.launch({ headless: false });
@@ -42,46 +39,78 @@ export class PlaywrightBrowser implements IBrowser {
 
   async mouseMove(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
-    this.cursorX = coordinate.x;
-    this.cursorY = coordinate.y;
-    await this.page.mouse.move(this.cursorX, this.cursorY);
+    await this.page.mouse.move(coordinate.x, coordinate.y, {
+      steps: 10
+    });
   }
 
   private async highlightClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) return;
-    await this.page.evaluate(clickEffectScript(coordinate));
+    await this.page.evaluate(({ x, y }) => {
+      if (!document.getElementById('click-effect-style')) {
+        const style = document.createElement('style');
+        style.id = 'click-effect-style';
+        style.textContent = `
+          .click-effect {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(255, 0, 0, 0.5);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            animation: click-animation 0.5s ease-out forwards;
+            z-index: 999999;
+          }
+          @keyframes click-animation {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      const effect = document.createElement('div');
+      effect.className = 'click-effect';
+      effect.style.left = `${x}px`;
+      effect.style.top = `${y}px`;
+      document.body.appendChild(effect);
+      setTimeout(() => effect.remove(), 500);
+    }, coordinate);
   }
 
   async leftClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
-    this.cursorX = coordinate.x;
-    this.cursorY = coordinate.y;
-    await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'left' });
+    await this.mouseMove(coordinate);
     await this.highlightClick(coordinate);
+    await this.page.mouse.down({ button: 'left' });
+    await this.page.mouse.up({ button: 'left' });
   }
 
   async rightClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
-    this.cursorX = coordinate.x;
-    this.cursorY = coordinate.y;
-    await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'right' });
+    await this.mouseMove(coordinate);
     await this.highlightClick(coordinate);
+    await this.page.mouse.down({ button: 'right' });
+    await this.page.mouse.up({ button: 'right' });
   }
 
   async middleClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
-    this.cursorX = coordinate.x;
-    this.cursorY = coordinate.y;
-    await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'middle' });
+    await this.mouseMove(coordinate);
     await this.highlightClick(coordinate);
+    await this.page.mouse.down({ button: 'middle' });
+    await this.page.mouse.up({ button: 'middle' });
   }
 
   async doubleClick(coordinate: Coordinate): Promise<void> {
     if (!this.page) throw new Error('Browser page not initialized');
-    this.cursorX = coordinate.x;
-    this.cursorY = coordinate.y;
-    await this.page.mouse.dblclick(this.cursorX, this.cursorY);
+    await this.mouseMove(coordinate);
     await this.highlightClick(coordinate);
+    await this.page.mouse.down({ button: 'left' });
+    await this.page.mouse.up({ button: 'left' });
+    await this.page.mouse.down({ button: 'left' });
+    await this.page.mouse.up({ button: 'left' });
   }
 
   async dragAndDrop(target: Coordinate): Promise<void> {

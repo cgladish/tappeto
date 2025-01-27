@@ -13,7 +13,7 @@ import { ComputerCommandSchema } from './types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { systemMessage } from './system-message';
 import { IBrowser } from './lib/browser/types';
-import { SeleniumBrowser } from './lib/browser/selenium-browser';
+import { PlaywrightBrowser } from './lib/browser/playwright-browser';
 
 interface ModelDefinition {
   model: string;
@@ -78,7 +78,7 @@ export class TestRunner {
         model, 
         computerConfig, 
         debug,
-        browser: new SeleniumBrowser() 
+        browser: new PlaywrightBrowser() 
       });
     } catch (error) {
       console.error("Error initializing TestRunner:", error);
