@@ -229,6 +229,11 @@ export class TestRunner {
         command = await this.model.invoke(messages);
         this.logDebugEnd(modelId, command);
 
+        if (command.action === 'finish') {
+          stepComplete = true;
+          break;
+        }
+
         const executeId = this.logDebugStart('Executing command');
         const result = await this.executeCommand(command);
         this.logDebugEnd(executeId);
@@ -236,7 +241,6 @@ export class TestRunner {
         await wait(1000); // Give time for the action to cause visible changes
 
         this.actionHistory.push({ command, result });
-        stepComplete = command.stepComplete;
         attempts = 0;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

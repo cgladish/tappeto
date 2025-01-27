@@ -10,7 +10,8 @@ export const CoordinateSchema = z.object({
 
 export const ComputerCommandSchema = z.object({
   goal: z.string().describe('The overarching goal of the current sequence of actions'),
-  reasoning: z.string().describe('Explanation of why this action was chosen'),
+  previousStepEvaluation: z.string().describe('Evaluation of why the previous step was successful or not'),
+  nextStepReasoning: z.string().describe('Explanation of why the next action is chosen'),
   action: z.enum([
     'wait',
     'key',
@@ -21,12 +22,12 @@ export const ComputerCommandSchema = z.object({
     'right_click',
     'middle_click',
     'double_click',
-    'goto'
+    'goto',
+    'finish'
   ]).describe('The type of action to perform'),
   coordinate: CoordinateSchema.optional().describe('The coordinates to trigger a mouse action at, if applicable'),
   text: z.string().optional().describe('The text to type, if applicable'),
-  url: z.string().optional().describe('The URL to navigate to, if applicable'),
-  stepComplete: z.boolean().describe('Whether this command completes the current step'),
+  url: z.string().optional().describe('The URL to navigate to, if applicable')
 });
 
 export type ComputerCommand = z.infer<typeof ComputerCommandSchema>;
