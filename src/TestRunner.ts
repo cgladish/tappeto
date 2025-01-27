@@ -92,9 +92,9 @@ export class TestRunner {
   }
 
   private updateCacheBreakpoints() {
-    const noBreakpointIndex = this.conversation.length - 4;
+    const noBreakpointIndex = this.conversation.length - 3;
     this.conversation.forEach((msg, i) => {
-      // Cache last 3 messages and first message
+      // ephemeral for last 3 messages and first message
       if (i < noBreakpointIndex && i !== 0) {
         delete msg.additional_kwargs?.cache_control;
       } else {
