@@ -9,9 +9,10 @@ async function runTest() {
     .ready();
   
   tap
-    .step('Go to localhost:3000 and login in the RollCredits app with the username producer@gmail.com and password "password"')
-    .step('Change your password to "passwordpassword" from the settings page')
-    .step('Logout of the app')
+    .step('Search Google for "tappeto testing" and click the first result')
+    .step('Scroll through the page and take a screenshot')
+    .step('Go back to search results and click the second link')
+    .step('Find any mention of "testing" on the page and highlight it');
 
   const success = await tap.run();
   console.log('Test completed:', success ? 'SUCCESS' : 'FAILURE');

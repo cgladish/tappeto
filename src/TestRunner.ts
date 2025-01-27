@@ -59,7 +59,8 @@ export class TestRunner {
         apiKey: primaryModel.apiKey,
         ...sharedConfig,
       })).withStructuredOutput(ComputerCommandSchema, {
-        method: "json_mode"
+        method: "json_mode",
+        name: "browser_command"
       });
 
       const fallbackChats: Runnable[] = [];
@@ -68,7 +69,8 @@ export class TestRunner {
           apiKey: model.apiKey,
           ...sharedConfig
         })).withStructuredOutput(ComputerCommandSchema, {
-          method: "json_mode"
+          method: "json_mode",
+          name: "browser_command"
         });
         fallbackChats.push(fallbackChat);
       }
@@ -199,21 +201,21 @@ export class TestRunner {
         new HumanMessage({
           content: [
             {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${screenshotBase64}`,
+                detail: "high"
+              }
+            },
+            {
               type: "text",
               text: `Previous actions taken:\n${relevantHistory}` + 
                 (lastError ? `\n\nLast action failed with error: ${lastError}. Consider a different approach.` : '') +
                 `\n\nCurrent goal: ${step.prompt}\n` +
                 (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
                 `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
-                `Below is a screenshot of the current browser state. Use this to verify the previous action achieved the intended result, as well as to determine accurate coordinates for interactions.`
+                `Attached is a screenshot of the current browser state. Use this to verify the previous action achieved the intended result, as well as to determine accurate coordinates for interactions.`
             },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/png;base64,${screenshotBase64}`,
-                detail: "high"
-              }
-            }
           ]
         })
       ];

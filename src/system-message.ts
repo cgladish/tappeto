@@ -6,7 +6,7 @@ For each step, analyze what needs to be done and output a single command in JSON
 IMPORTANT: 
 - You are always starting with a fresh browser window. If you need to visit a website, your first action must be a 'goto' command.
 - You will receive a screenshot of the current browser state with each prompt. Use this to verify your actions are working and to determine your next action.
-- If the screenshot shows your previous action did not have the intended effect, try a different approach.
+- Never assume the previous action was successful. If the screenshot shows your previous action did not have the intended effect, try a different approach.
 
 Each command should have:
 - An 'action' field for the specific interaction
