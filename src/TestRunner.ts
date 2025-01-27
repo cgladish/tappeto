@@ -16,6 +16,7 @@ import { instructions } from './instructions';
 import { IBrowser } from './lib/browser/types';
 import { PlaywrightBrowser } from './lib/browser/playwright-browser';
 import { wait } from './utils';
+import fs from 'fs';
 
 interface ModelDefinition {
   model: string;
@@ -183,7 +184,8 @@ export class TestRunner {
       const attemptId = this.logDebugStart(`Attempt ${attempts}`);
 
       const screenshotId = this.logDebugStart('Taking screenshot');
-      const screenshotBase64 = await this.browser.takeScreenshot();
+      const screenshotBase64 = await this.browser.takeScreenshot()
+      fs.writeFileSync(`./screenshots/screenshot-${this.actionHistory.length}.png`, Buffer.from(screenshotBase64, 'base64'));
       this.logDebugEnd(screenshotId);
       
       // Only include recent history

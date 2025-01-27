@@ -126,7 +126,7 @@ export class PlaywrightBrowser implements IBrowser {
     if (!this.page) throw new Error('Browser page not initialized');
     const screenshot = await this.page.screenshot({ 
       type: 'png',
-      path: undefined
+      scale: 'css'
     });
     return screenshot.toString('base64');
   }
