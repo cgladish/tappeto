@@ -12,6 +12,8 @@ import { initChatModel } from "langchain/chat_models/universal";
 import { ComputerCommandSchema } from './types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { systemMessage } from './system-message';
+import { IBrowser } from './lib/browser/types';
+import { PlaywrightBrowser } from './lib/browser/playwright-browser';
 
 interface ModelDefinition {
   model: string;
@@ -35,9 +37,7 @@ const sharedConfig = {
 export class TestRunner {
   private steps: TestStep[] = [];
   private computerConfig: ComputerConfig;
-  private browser?: Browser;
-  private context?: BrowserContext;
-  private page?: Page;
+  private browser: IBrowser;
   private model: Runnable;
   private cursorX = 0;
   private cursorY = 0;
@@ -74,17 +74,23 @@ export class TestRunner {
       if (fallbackChats.length > 0) {
         model = model.withFallbacks(fallbackChats);
       }
-      return new TestRunner({ model, computerConfig, debug });
+      return new TestRunner({ 
+        model, 
+        computerConfig, 
+        debug,
+        browser: new PlaywrightBrowser() 
+      });
     } catch (error) {
       console.error("Error initializing TestRunner:", error);
       throw error;
     }
   }
 
-  private constructor({ model, computerConfig, debug = false }: TestRunnerConfig) {
+  private constructor({ model, computerConfig, debug = false, browser }: TestRunnerConfig & { browser: IBrowser }) {
     this.model = model;
     this.debug = debug;
     this.computerConfig = ComputerConfigSchema.parse(computerConfig);
+    this.browser = browser;
   }
 
   addStep(step: TestStep): TestRunner {
@@ -94,19 +100,14 @@ export class TestRunner {
   }
 
   async init() {
-    this.browser = await chromium.launch({ headless: false });
-    this.context = await this.browser.newContext({
-      viewport: {
-        width: this.computerConfig.displayWidth,
-        height: this.computerConfig.displayHeight
-      }
+    await this.browser.init({
+      displayWidth: this.computerConfig.displayWidth,
+      displayHeight: this.computerConfig.displayHeight
     });
-    this.page = await this.context.newPage();
   }
 
   async cleanup() {
-    await this.context?.close();
-    await this.browser?.close();
+    await this.browser.cleanup();
   }
 
   async run(): Promise<boolean> {
@@ -165,8 +166,6 @@ export class TestRunner {
   }
 
   private async executeStep(step: TestStep): Promise<any> {
-    if (!this.page) throw new Error('Browser page not initialized');
-
     const stepId = this.logDebugStart(`Step: ${step.prompt}`);
     let stepComplete = false;
     let attempts = 0;
@@ -180,11 +179,7 @@ export class TestRunner {
       const attemptId = this.logDebugStart(`Attempt ${attempts}`);
 
       const screenshotId = this.logDebugStart('Taking screenshot');
-      const screenshot = await this.page.screenshot({ 
-        type: 'png',
-        path: undefined
-      });
-      const screenshotBase64 = screenshot.toString('base64');
+      const screenshotBase64 = await this.browser.takeScreenshot();
       this.logDebugEnd(screenshotId);
       
       // Only include recent history
@@ -253,57 +248,51 @@ export class TestRunner {
   }
 
   private async executeCommand(command: ComputerCommand): Promise<any> {
-    if (!this.page) throw new Error('Browser page not initialized');
-
     try {
       switch (command.action) {
         case 'goto':
           if (!command.url) throw new Error('URL required for goto action');
-          await this.page.goto(command.url);
+          await this.browser.goto(command.url);
           break;
 
         case 'key':
           if (!command.text) throw new Error('Text required for key action');
-          await this.page.keyboard.press(command.text);
+          await this.browser.pressKey(command.text);
           break;
 
         case 'type':
           if (!command.text) throw new Error('Text required for type action');
-          await this.page.keyboard.type(command.text);
+          await this.browser.type(command.text);
           break;
 
         case 'mouse_move':
           if (!command.coordinate) throw new Error('Coordinate required for mouse_move action');
-          this.cursorX = command.coordinate.x;
-          this.cursorY = command.coordinate.y;
-          await this.page.mouse.move(this.cursorX, this.cursorY);
+          await this.browser.mouseMove(command.coordinate);
           break;
 
         case 'left_click':
-          await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'left' });
+          await this.browser.leftClick();
           break;
 
         case 'left_click_drag':
           if (!command.coordinate) throw new Error('Coordinate required for left_click_drag action');
-          await this.page.mouse.down();
-          await this.page.mouse.move(command.coordinate.x, command.coordinate.y);
-          await this.page.mouse.up();
+          await this.browser.dragAndDrop(command.coordinate);
           break;
 
         case 'right_click':
-          await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'right' });
+          await this.browser.rightClick();
           break;
 
         case 'middle_click':
-          await this.page.mouse.click(this.cursorX, this.cursorY, { button: 'middle' });
+          await this.browser.middleClick();
           break;
 
         case 'double_click':
-          await this.page.mouse.dblclick(this.cursorX, this.cursorY);
+          await this.browser.doubleClick();
           break;
 
         case 'cursor_position':
-          return { x: this.cursorX, y: this.cursorY };
+          return this.browser.getCursorPosition();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
