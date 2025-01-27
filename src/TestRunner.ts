@@ -92,24 +92,18 @@ export class TestRunner {
   }
 
   private updateCacheBreakpoints() {
-    // Remove any existing cache control
-    this.conversation.forEach(msg => {
-      if (msg.additional_kwargs?.cache_control) {
-        delete msg.additional_kwargs.cache_control;
+    const noBreakpointIndex = this.conversation.length - 4;
+    this.conversation.forEach((msg, i) => {
+      // Cache last 3 messages and first message
+      if (i < noBreakpointIndex && i !== 0) {
+        delete msg.additional_kwargs?.cache_control;
+      } else {
+        msg.additional_kwargs = {
+          ...msg.additional_kwargs,
+          cache_control: { type: "ephemeral" }
+        }
       }
     });
-
-    // Set cache control on the message that's 3 before the end
-    const breakpointIndex = this.conversation.length - 4;
-    if (breakpointIndex >= 0) {
-      const msgToCache = this.conversation[breakpointIndex];
-      if (msgToCache) {
-        msgToCache.additional_kwargs = {
-          ...msgToCache.additional_kwargs,
-          cache_control: { type: "ephemeral" }
-        };
-      }
-    }
   }
 
   private addToConversation(message: HumanMessage | AIMessage | SystemMessage) {
@@ -124,7 +118,7 @@ export class TestRunner {
     this.browser = browser;
     
     // Initialize conversation with system message and instructions
-    this.conversation.push(new SystemMessage({
+    this.addToConversation(new HumanMessage({
       content: instructions,
       additional_kwargs: {
         cache_control: { type: "ephemeral" }
