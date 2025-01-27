@@ -11,7 +11,7 @@ import {
 import { Runnable } from '@langchain/core/runnables';
 import { initChatModel, InitChatModelFields } from "langchain/chat_models/universal";
 import { ComputerCommandSchema } from './types';
-import { HumanMessage } from "@langchain/core/messages";
+import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { instructions } from './instructions';
 import { IBrowser } from './lib/browser/types';
 import { PlaywrightBrowser } from './lib/browser/playwright-browser';
@@ -52,6 +52,7 @@ export class TestRunner {
   private readonly MAX_CONSECUTIVE_ERRORS = 5;
   private debug: boolean;
   private debugTimers: Map<string, { start: number, label: string }> = new Map();
+  private conversation: (HumanMessage | AIMessage | SystemMessage)[] = [];
 
   static async create(computerConfig: ComputerConfig, debug: boolean = false): Promise<TestRunner> {
     try {
@@ -90,11 +91,45 @@ export class TestRunner {
     }
   }
 
+  private updateCacheBreakpoints() {
+    // Remove any existing cache control
+    this.conversation.forEach(msg => {
+      if (msg.additional_kwargs?.cache_control) {
+        delete msg.additional_kwargs.cache_control;
+      }
+    });
+
+    // Set cache control on the message that's 3 before the end
+    const breakpointIndex = this.conversation.length - 4;
+    if (breakpointIndex >= 0) {
+      const msgToCache = this.conversation[breakpointIndex];
+      if (msgToCache) {
+        msgToCache.additional_kwargs = {
+          ...msgToCache.additional_kwargs,
+          cache_control: { type: "ephemeral" }
+        };
+      }
+    }
+  }
+
+  private addToConversation(message: HumanMessage | AIMessage | SystemMessage) {
+    this.conversation.push(message);
+    this.updateCacheBreakpoints();
+  }
+
   private constructor({ model, computerConfig, debug = false, browser }: TestRunnerConfig & { browser: IBrowser }) {
     this.model = model;
     this.debug = debug;
     this.computerConfig = ComputerConfigSchema.parse(computerConfig);
     this.browser = browser;
+    
+    // Initialize conversation with system message and instructions
+    this.conversation.push(new SystemMessage({
+      content: instructions,
+      additional_kwargs: {
+        cache_control: { type: "ephemeral" }
+      }
+    }));
   }
 
   addStep(step: TestStep): TestRunner {
@@ -177,7 +212,7 @@ export class TestRunner {
 
     while (!stepComplete && attempts < MAX_ATTEMPTS_PER_STEP) {
       if (attempts > 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(1.5, attempts - 1)));
+        await wait(1000 * Math.pow(1.5, attempts - 1));
       }
       attempts++;
       const attemptId = this.logDebugStart(`Attempt ${attempts}`);
@@ -185,49 +220,38 @@ export class TestRunner {
       const screenshotId = this.logDebugStart('Taking screenshot');
       const screenshotBase64 = await this.browser.takeScreenshot()
       this.logDebugEnd(screenshotId);
-      
-      // Only include recent history
-      const relevantHistory = this.actionHistory.slice(-10).map(h => 
-        `Action: ${h.command.action} (${h.command.goal})` +
-        (h.command.text ? ` with text "${h.command.text}"` : '') +
-        (h.command.coordinate ? ` at coordinates (${h.command.coordinate.x}, ${h.command.coordinate.y})` : '') +
-        (h.error ? ' - Failed' : ' - Success')
-      ).join('\n');
 
-      const lastError = this.actionHistory[this.actionHistory.length - 1]?.error;
-      
-      const messages = [
-        new HumanMessage({
-          content: [
-            {
-              type: "text",
-              text: instructions
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/png;base64,${screenshotBase64}`,
-                detail: "high"
-              }
-            },
-            {
-              type: "text",
-              text: `Previous actions taken:\n${relevantHistory}` + 
-                (lastError ? `\n\nLast action failed with error: ${lastError}. Consider a different approach.` : '') +
-                `\n\nCurrent goal: ${step.prompt}\n` +
-                (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
-                `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.\n\n` +
-                `Attached is a screenshot of the current browser state. Use this to verify the previous action achieved the intended result, as well as to determine accurate coordinates for interactions.`
-            },
-          ]
-        })
-      ];
+      // Add the current step as a human message
+      const humanMessage = new HumanMessage({
+        content: [
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/png;base64,${screenshotBase64}`,
+              detail: "high"
+            }
+          },
+          {
+            type: "text",
+            text: `Current goal: ${step.prompt}\n` +
+              (attempts > 1 ? `\nPrevious attempts haven't succeeded. Try a different strategy.` : '') +
+              `\nDetermine the next action needed to accomplish this goal. Set stepComplete to true only when you're confident the goal has been achieved.`
+          }
+        ]
+      });
+
+      this.addToConversation(humanMessage);
 
       let command: ComputerCommand;
       try {
         const modelId = this.logDebugStart('Waiting for model response');
-        command = await this.model.invoke(messages);
+        command = await this.model.invoke(this.conversation);
         this.logDebugEnd(modelId, command);
+
+        this.addToConversation(new AIMessage({
+          content: JSON.stringify(command),
+          additional_kwargs: { command }
+        }));
 
         if (command.action === 'finish') {
           stepComplete = true;
@@ -238,16 +262,24 @@ export class TestRunner {
         const result = await this.executeCommand(command);
         this.logDebugEnd(executeId);
 
-        await wait(1000); // Give time for the action to cause visible changes
+        await wait(1000);
 
-        this.actionHistory.push({ command, result });
+        // Add result to conversation
+        this.addToConversation(new AIMessage({
+          content: `Action completed successfully: ${command.action}`,
+          additional_kwargs: { result }
+        }));
+
         attempts = 0;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        this.actionHistory.push({ 
-          command: command!, 
-          error: errorMessage 
-        });
+        
+        // Add error to conversation
+        this.addToConversation(new AIMessage({
+          content: `Action failed: ${errorMessage}`,
+          additional_kwargs: { error: errorMessage }
+        }));
+        
         this.logDebug(`Attempt failed: ${errorMessage}`);
       }
       this.logDebugEnd(attemptId);
