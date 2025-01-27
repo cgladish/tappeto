@@ -11,8 +11,8 @@ import {
 import { Runnable } from '@langchain/core/runnables';
 import { initChatModel, InitChatModelFields } from "langchain/chat_models/universal";
 import { ComputerCommandSchema } from './types';
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { systemMessage } from './system-message';
+import { HumanMessage } from "@langchain/core/messages";
+import { instructions } from './instructions';
 import { IBrowser } from './lib/browser/types';
 import { PlaywrightBrowser } from './lib/browser/playwright-browser';
 import { wait } from './utils';
@@ -197,9 +197,12 @@ export class TestRunner {
       const lastError = this.actionHistory[this.actionHistory.length - 1]?.error;
       
       const messages = [
-        new SystemMessage(systemMessage),
         new HumanMessage({
           content: [
+            {
+              type: "text",
+              text: instructions
+            },
             {
               type: "image_url",
               image_url: {
