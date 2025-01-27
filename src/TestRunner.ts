@@ -5,15 +5,17 @@ import {
   ComputerConfig,
   ComputerConfigSchema,
   TestRunnerConfig,
-  ComputerCommand
+  ComputerCommand,
+  WAIT_TIME
 } from './types';
 import { Runnable } from '@langchain/core/runnables';
-import { initChatModel } from "langchain/chat_models/universal";
+import { initChatModel, InitChatModelFields } from "langchain/chat_models/universal";
 import { ComputerCommandSchema } from './types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { systemMessage } from './system-message';
 import { IBrowser } from './lib/browser/types';
 import { PlaywrightBrowser } from './lib/browser/playwright-browser';
+import { wait } from './utils';
 
 interface ModelDefinition {
   model: string;
@@ -28,7 +30,7 @@ export const primaryModel: ModelDefinition =
 export const fallbackModels: ModelDefinition[] = [
 ];
 
-const sharedConfig = {
+const sharedConfig: InitChatModelFields = {
   maxTokens: 4096,
   temperature: 0,
   maxRetries: 2,
@@ -55,7 +57,7 @@ export class TestRunner {
     try {
       let model = (await initChatModel(primaryModel.model, {
         apiKey: primaryModel.apiKey,
-        ...sharedConfig
+        ...sharedConfig,
       })).withStructuredOutput(ComputerCommandSchema, {
         method: "json_mode"
       });
@@ -226,6 +228,8 @@ export class TestRunner {
         const result = await this.executeCommand(command);
         this.logDebugEnd(executeId);
 
+        await wait(1000); // Give time for the action to cause visible changes
+
         this.actionHistory.push({ command, result });
         stepComplete = command.stepComplete;
         attempts = 0;
@@ -250,6 +254,10 @@ export class TestRunner {
   private async executeCommand(command: ComputerCommand): Promise<any> {
     try {
       switch (command.action) {
+        case 'wait':
+          await wait(WAIT_TIME * 1000);
+          break;
+
         case 'goto':
           if (!command.url) throw new Error('URL required for goto action');
           await this.browser.goto(command.url);

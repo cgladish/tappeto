@@ -1,13 +1,18 @@
 import { z } from 'zod';
 import { Runnable } from '@langchain/core/runnables';
 
+export const WAIT_TIME = 5; // Seconds
+
 export const CoordinateSchema = z.object({
-  x: z.number(),
-  y: z.number()
-}).describe('(x, y): The x (pixels from the left edge) and y (pixels from the top edge) coordinates');
+  x: z.number().describe('The x (pixels from the left edge) coordinate'),
+  y: z.number().describe('The y (pixels from the top edge) coordinate')
+});
 
 export const ComputerCommandSchema = z.object({
+  goal: z.string().describe('The overarching goal of the current sequence of actions'),
+  reasoning: z.string().describe('Explanation of why this action was chosen'),
   action: z.enum([
+    'wait',
     'key',
     'type',
     'mouse_move',
@@ -21,9 +26,7 @@ export const ComputerCommandSchema = z.object({
   coordinate: CoordinateSchema.optional().describe('The coordinates to trigger a mouse action at, if applicable'),
   text: z.string().optional().describe('The text to type, if applicable'),
   url: z.string().optional().describe('The URL to navigate to, if applicable'),
-  goal: z.string().describe('The overarching goal of the current sequence of actions'),
   stepComplete: z.boolean().describe('Whether this command completes the current step'),
-  reasoning: z.string().describe('Explanation of why this action was chosen')
 });
 
 export type ComputerCommand = z.infer<typeof ComputerCommandSchema>;
