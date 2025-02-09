@@ -1,6 +1,6 @@
 {
   "name": "tappeto",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Natural language UI & E2E testing using Anthropic's Computer Use tool",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
